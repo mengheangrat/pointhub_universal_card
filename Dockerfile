@@ -1,14 +1,23 @@
-FROM ubuntu:latest
-USER root
-WORKDIR /home/app
-COPY ./package.json /home/app/package.json
-RUN apt-get update
-RUN apt-get -y install curl gnupg
-RUN curl -sL https://deb.nodesource.com/setup_11.x  | bash -
-RUN apt-get -y install nodejs
+# Use an official Node runtime as a parent image
+FROM node:16-alpine
+
+# Set the working directory
+WORKDIR /app
+
+# Copy package.json and package-lock.json
+COPY package*.json ./
+
+# Install dependencies
 RUN npm install
 
+# Copy the rest of the application code
+COPY . .
 
-COPY --chown=node:node . .
+# Set the working directory to src
+WORKDIR /app/src
 
-CMD [ "node", "index.js" ]
+# Expose the port the app runs on
+EXPOSE 3000
+
+# Run the application
+CMD ["node", "index.js"]
