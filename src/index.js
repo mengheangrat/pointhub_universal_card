@@ -11,7 +11,7 @@ const app = express();
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 
 // Register a custom font
-registerFont("./src/Arial.ttf", { family: "Arial" });
+registerFont("./Arial.ttf", { family: "Arial" });
 
 const adminUserIds = process.env.ADMIN_USER_IDS.split(",").map((id) =>
   parseInt(id.trim(), 10)
@@ -66,7 +66,7 @@ async function createCard(barcode_file, card_number) {
   const ctx = canvas.getContext("2d");
 
   // Load template image
-  const template = await loadImage("./src/template.png");
+  const template = await loadImage("./template.png");
   ctx.drawImage(template, 0, 0, canvas.width, canvas.height);
 
   // Add text
