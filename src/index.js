@@ -5,12 +5,34 @@ const bwipjs = require("bwip-js"); // For generating barcodes
 const { createCanvas, loadImage, registerFont } = require("canvas");
 const fs = require("fs");
 const express = require("express");
+const sqlite3 = require("sqlite3").verbose(); // Add SQLite
 
 const app = express();
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 
 // Register a custom font
-registerFont("./Arial.ttf", { family: "Arial" });
+registerFont("./src/Arial.ttf", { family: "Arial" });
+
+const adminUserIds = process.env.ADMIN_USER_IDS.split(",").map((id) =>
+  parseInt(id.trim(), 10)
+);
+
+// Initialize and configure the SQLite database
+let db = new sqlite3.Database("./subscribers.db", (err) => {
+  if (err) {
+    console.error(err.message);
+  }
+  console.log("Connected to the SQLite database.");
+});
+
+// Create the subscribers table if it doesn't exist
+db.run(`CREATE TABLE IF NOT EXISTS subscribers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT UNIQUE,
+  username TEXT,
+  first_name TEXT,
+  last_name TEXT
+)`);
 
 // Generate barcode
 async function generateBarcode(data) {
@@ -44,14 +66,12 @@ async function createCard(barcode_file, card_number) {
   const ctx = canvas.getContext("2d");
 
   // Load template image
-  const template = await loadImage("template.png");
+  const template = await loadImage("./src/template.png");
   ctx.drawImage(template, 0, 0, canvas.width, canvas.height);
 
   // Add text
   ctx.font = "38px Arial";
   ctx.fillStyle = "black";
-  // ctx.fillText(user_name, 50, 50);
-  // ctx.fillText(expiry_date, 50, 100);
 
   // Add card number above the barcode
   ctx.font = "38px Arial";
@@ -74,12 +94,28 @@ async function createCard(barcode_file, card_number) {
   return outputCardFileName;
 }
 
+// Store subscriber information
+function storeSubscriber(user) {
+  db.run(
+    `INSERT OR IGNORE INTO subscribers (user_id, username, first_name, last_name) VALUES (?, ?, ?, ?)`,
+    [user.id, user.username, user.first_name, user.last_name],
+    (err) => {
+      if (err) {
+        return console.error(err.message);
+      }
+      console.log(`Stored subscriber ${user.username || user.first_name}`);
+    }
+  );
+}
+
 // Bot command handlers
-bot.start((ctx) =>
-  ctx.reply("Welcome! Use /get_card to get your membership card.")
-);
+bot.start((ctx) => {
+  storeSubscriber(ctx.message.from); // Store subscriber information
+  ctx.reply("Welcome! Use /get_card to get your membership card.");
+});
 
 bot.command("get_card", async (ctx) => {
+  storeSubscriber(ctx.message.from); // Store subscriber information
   const user = ctx.message.from;
   const barcode_data = String(user.id).slice(-9);
   const card_number = barcode_data;
@@ -97,6 +133,25 @@ bot.command("get_card", async (ctx) => {
     console.error("Error generating card:", error);
     ctx.reply("Sorry, there was an error generating your card.");
   }
+});
+
+// Command to list subscribers (only for admins)
+bot.command("list_subscribers", (ctx) => {
+  const userId = ctx.message.from.id;
+  if (!adminUserIds.includes(userId)) {
+    return ctx.reply("You are not authorized to use this command.");
+  }
+
+  db.all(`SELECT * FROM subscribers`, [], (err, rows) => {
+    if (err) {
+      return console.error(err.message);
+    }
+    let response = "Subscribers:\n";
+    rows.forEach((row) => {
+      response += `${row.first_name} (${row.username || row.user_id})\n`;
+    });
+    ctx.reply(response);
+  });
 });
 
 // Start bot
